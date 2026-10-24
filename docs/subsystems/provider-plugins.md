@@ -35,8 +35,8 @@ Quota aggregation in [`quotas.go`](../../internal/provider/quotas.go) suppresses
 ## Native Messages requests answered whole
 
 A plugin account that only streams receives a non-streaming Messages request
-through the same native passthrough as a streaming one, with only `stream`
-set to true. `gathers` and `gatherMessages` in
+eligible for native passthrough through the same path as a streaming one,
+with only `stream` set to true. `gathers` and `gatherMessages` in
 [`gathered.go`](../../internal/gateway/gathered.go) and
 [`gathered_messages.go`](../../internal/gateway/gathered_messages.go) collect
 the reply's message and block events into one JSON message. This keeps
@@ -50,7 +50,8 @@ opaque blocks), text, thinking, signatures, citations, tool arguments,
 stop fields and usage are retained. A malformed, unsupported, failed or
 unfinished stream is an error, never a partial successful JSON reply.
 Native streaming requests, Chat and Responses retain their existing paths;
-cross-protocol Messages translation is unchanged. The regression in
+cross-protocol Messages translation and requests that need host-driven search
+remain on their existing translation paths. The regression in
 [`plugin_messages_gather_test.go`](../../internal/gateway/plugin_messages_gather_test.go)
 uses a real plugin host and local fake vendor, not a live Kiro account.
 

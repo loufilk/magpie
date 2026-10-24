@@ -3722,8 +3722,8 @@ func (s *Server) attempt(w http.ResponseWriter, r *http.Request, from provider.P
 	}
 	// a backend that only streams gets a non-streaming request translated
 	// (the provider is always streamed on that path) rather than relayed,
-	// except a plugin's on Responses, which is relayed streamed and given
-	// back whole (gathers)
+	// except a plugin's on Responses or Messages, which is relayed streamed
+	// and given back whole (gathers)
 	relayable := slices.Contains(s.usable(p, model), from) && (p.Account == nil || !p.Account.Stream || streamOf(body) || gathers(p, from, body))
 	relay := relayable
 	// a Claude model is asked on Messages whatever API the client spoke,

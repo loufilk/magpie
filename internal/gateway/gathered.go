@@ -36,11 +36,11 @@ func (g *gathered) Header() http.Header         { return g.h }
 func (g *gathered) WriteHeader(status int)      { g.status = status }
 func (g *gathered) Write(b []byte) (int, error) { return g.buf.Write(b) }
 
-// finish writes the reply to w: the response of the stream's
-// response.completed (or response.incomplete), its output filled from the
-// stream's items, or else its text, when the event left it empty.
-// A reply that came whole goes as it came. A stream that failed, or ended
-// before saying its reply had, is a 502, as a translated one is
+// finish writes the native reply to w. Messages is assembled by
+// gatherMessages; Responses uses response.completed (or response.incomplete),
+// its output filled from the stream's items, or else its text, when empty.
+// A complete reply that came whole goes as it came. A stream that failed,
+// or ended before saying its reply had, is a 502, as a translated one is
 // (TestNonStreamEndedShort), never an empty 200.
 func (g *gathered) finish(w http.ResponseWriter, p provider.Provider, sse bool, cut string, failed string) (int, string) {
 	if !sse {
