@@ -122,3 +122,40 @@ func TestGatherMessagesWholeReply(t *testing.T) {
 		})
 	}
 }
+
+func TestGatherMessagesToolInputFragments(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		parts []string
+		want  string
+	}{
+		{"empty delta", []string{""}, "{}"},
+		{"no delta", nil, "{}"},
+		{"split input", []string{"", "{", "\"value\":", "1", "}"}, "{\"value\":1}"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			events := []wholeEvent{
+				{"message_start", map[string]any{"type": "message_start", "message": obj{"type": raw("message"), "id": raw("msg_1"), "content": raw([]any{}), "usage": raw(obj{})}}},
+				{"content_block_start", map[string]any{"type": "content_block_start", "index": 0, "content_block": obj{"type": raw("tool_use"), "id": raw("toolu_1"), "name": raw("f"), "input": raw(obj{})}}},
+			}
+			for _, part := range tc.parts {
+				events = append(events, wholeEvent{"content_block_delta", map[string]any{"type": "content_block_delta", "index": 0, "delta": obj{"type": raw("input_json_delta"), "partial_json": raw(part)}}})
+			}
+			events = append(events,
+				wholeEvent{"content_block_stop", map[string]any{"type": "content_block_stop", "index": 0}},
+				wholeEvent{"message_delta", map[string]any{"type": "message_delta", "delta": obj{"stop_reason": raw("tool_use")}}},
+				wholeEvent{"message_stop", map[string]any{"type": "message_stop"}},
+			)
+			got, err := gatherMessages([]byte(messagesGatherStream(events)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var reply struct {
+				Content []struct{ Input json.RawMessage }
+			}
+			if err := json.Unmarshal(got, &reply); err != nil || len(reply.Content) != 1 || string(reply.Content[0].Input) != tc.want {
+				t.Fatalf("tool input: %v %s, want %s", err, got, tc.want)
+			}
+		})
+	}
+}

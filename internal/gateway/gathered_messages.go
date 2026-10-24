@@ -62,7 +62,7 @@ func gatherMessages(body []byte) ([]byte, error) {
 			if e.Type == "content_block_delta" {
 				return b.delta(e.Delta)
 			}
-			if b.hasInput {
+			if b.input.Len() > 0 {
 				input := []byte(b.input.String())
 				if !json.Valid(input) {
 					return fmt.Errorf("invalid Messages tool input at %d", i)
@@ -123,11 +123,10 @@ func gatherMessages(body []byte) ([]byte, error) {
 }
 
 type gatheredMessageBlock struct {
-	body     obj
-	text     map[string]*strings.Builder
-	input    strings.Builder
-	hasInput bool
-	closed   bool
+	body   obj
+	text   map[string]*strings.Builder
+	input  strings.Builder
+	closed bool
 }
 
 func (b *gatheredMessageBlock) delta(d obj) error {
@@ -144,7 +143,6 @@ func (b *gatheredMessageBlock) delta(d obj) error {
 		if err := json.Unmarshal(d["partial_json"], &part); err != nil {
 			return fmt.Errorf("invalid Messages tool input delta: %w", err)
 		}
-		b.hasInput = true
 		b.input.WriteString(part)
 		return nil
 	case "citations_delta":
