@@ -4223,7 +4223,7 @@ func (s *Server) passthrough(w http.ResponseWriter, r *http.Request, p provider.
 	// asked streamed, the stream read here (gathered)
 	var gather *gathered
 	if gathers(p, proto, body) {
-		gather = &gathered{h: http.Header{}, status: http.StatusOK}
+		gather = &gathered{proto: proto, h: http.Header{}, status: http.StatusOK}
 		body = withFields(body, map[string]any{"stream": true})
 	}
 	searchFn := false    // Codex's tool search sent as a function

@@ -17,15 +17,16 @@ import (
 // so Grok answered without searching, and the response's tools and usage
 // details). A subscription magpie signs in to itself (Codex's ChatGPT
 // backend, Qoder) is translated as before: its own code fits its requests,
-// and no report asks for more. Messages isn't gathered, as its stream has
-// no event that holds the whole reply.
+// and no report asks for more. Messages is gathered from its block events,
+// so a non-streaming request keeps the same native controls as a stream.
 func gathers(p provider.Provider, proto provider.Protocol, body []byte) bool {
-	return proto == provider.Responses && p.IsPlugin() && p.Account.Stream && !streamOf(body)
+	return (proto == provider.Responses || proto == provider.Anthropic) && p.IsPlugin() && p.Account.Stream && !streamOf(body)
 }
 
-// gathered holds a relayed Responses stream that the client asked for
-// whole, and gives the client the response the stream ends with.
+// gathered holds a relayed native stream that the client asked for whole.
+// Responses ends with a whole response; Messages is assembled from blocks.
 type gathered struct {
+	proto  provider.Protocol
 	h      http.Header
 	status int
 	buf    bytes.Buffer
@@ -43,12 +44,52 @@ func (g *gathered) Write(b []byte) (int, error) { return g.buf.Write(b) }
 // (TestNonStreamEndedShort), never an empty 200.
 func (g *gathered) finish(w http.ResponseWriter, p provider.Provider, sse bool, cut string, failed string) (int, string) {
 	if !sse {
+		if g.proto == provider.Anthropic {
+			msg := failed
+			if msg == "" {
+				msg = cut
+			}
+			var message obj
+			var content []json.RawMessage
+			if msg == "" && (json.Unmarshal(g.buf.Bytes(), &message) != nil || str(message, "type") != "message" ||
+				json.Unmarshal(message["content"], &content) != nil || content == nil || str(message, "stop_reason") == "") {
+				msg = p.Name + ": invalid whole Messages reply"
+			}
+			if msg != "" {
+				return writeError(w, provider.Anthropic, 502, msg), msg
+			}
+		}
 		for k, vs := range g.h {
 			w.Header()[k] = vs
+		}
+		if g.proto == provider.Anthropic {
+			w.Header().Set("Content-Type", "application/json")
 		}
 		w.WriteHeader(g.status)
 		w.Write(g.buf.Bytes())
 		return g.status, failed
+	}
+	if g.proto == provider.Anthropic {
+		body, err := gatherMessages(g.buf.Bytes())
+		if err != nil || cut != "" || failed != "" {
+			msg := failed
+			if msg == "" {
+				msg = cut
+			}
+			if msg == "" {
+				msg = p.Name + ": " + err.Error()
+			}
+			return writeError(w, provider.Anthropic, 502, msg), msg
+		}
+		for _, k := range []string{"Request-Id", "X-Request-Id"} {
+			if v := g.h.Get(k); v != "" {
+				w.Header().Set(k, v)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(body)
+		return http.StatusOK, ""
 	}
 	var resp json.RawMessage
 	items := map[int]json.RawMessage{}

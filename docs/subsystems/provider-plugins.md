@@ -32,6 +32,28 @@ For a moved subscription, its built-in upstream implementation does not run. Plu
 
 Quota aggregation in [`quotas.go`](../../internal/provider/quotas.go) suppresses a key's GLM Coding Plan card only when its comparable reset windows match a ZCode subscription card: built-in or moved `zcode`, or independently installed `zcode-plugin`. [`PlanQuotas`](../../internal/provider/planquota.go) identifies GLM plans by their quota endpoint, including custom provider ids. Matching reset schedules from unrelated vendors do not hide cards. Within this pair, resets remain a heuristic for the shared account; a plan's `User` is a key label or mask, not a login identity. Errors, conflicting resets, or no comparable resets keep the plan visible. This applies to the Usage page, tray, quota reports, alerts, and quota waits; it does not change plugin ownership or upstream requests.
 
+## Native Messages requests answered whole
+
+A plugin account that only streams receives a non-streaming Messages request
+through the same native passthrough as a streaming one, with only `stream`
+set to true. `gathers` and `gatherMessages` in
+[`gathered.go`](../../internal/gateway/gathered.go) and
+[`gathered_messages.go`](../../internal/gateway/gathered_messages.go) collect
+the reply's message and block events into one JSON message. This keeps
+`output_config.effort`, adaptive thinking, display, schema and the client's
+output cap out of the cross-protocol budget conversion. The plugin still
+validates the account's native effort schema; the host does not infer a lost
+effort from a token budget.
+
+The original reply envelope, complete blocks (including server-tool and
+opaque blocks), text, thinking, signatures, citations, tool arguments,
+stop fields and usage are retained. A malformed, unsupported, failed or
+unfinished stream is an error, never a partial successful JSON reply.
+Native streaming requests, Chat and Responses retain their existing paths;
+cross-protocol Messages translation is unchanged. The regression in
+[`plugin_messages_gather_test.go`](../../internal/gateway/plugin_messages_gather_test.go)
+uses a real plugin host and local fake vendor, not a live Kiro account.
+
 ## Usage a plugin collects late
 
 A plugin that learns a step's usage only after the step has ended reports it with a later step, in `usage.magpie_deferred` (`prompt_tokens`, `completion_tokens`, `cached_tokens`, `cache_write_tokens`) beside that step's own usage fields. The Cursor plugin does this: a tool step's usage event shows seconds after the step, so the step says 0 and the conversation's next step collects the event ([#1053](https://github.com/yetone/magpie/issues/1053)).
