@@ -36,7 +36,7 @@ Quota aggregation in [`quotas.go`](../../internal/provider/quotas.go) suppresses
 
 A plugin account that only streams receives a non-streaming Messages request
 eligible for native passthrough through the same path as a streaming one,
-with only `stream` set to true. `gathers` and `gatherMessages` in
+with `stream` set to true. `gathers` and `gatherMessages` in
 [`gathered.go`](../../internal/gateway/gathered.go) and
 [`gathered_messages.go`](../../internal/gateway/gathered_messages.go) collect
 the reply's message and block events into one JSON message. This keeps
@@ -44,6 +44,19 @@ the reply's message and block events into one JSON message. This keeps
 output cap out of the cross-protocol budget conversion. The plugin still
 validates the account's native effort schema; the host does not infer a lost
 effort from a token budget.
+
+For this newly gathered Messages path, [`gatheredMessageCache`](../../internal/gateway/gathered_cache.go)
+restores the translation path's default prompt-cache boundaries when the
+caller supplied no cache controls: the last nonempty system text block
+(or the last custom tool when the system is empty), and the last known
+cacheable block in the final message. String content is wrapped without
+changing its text. Thinking and unknown native blocks are never marked or
+discarded. At most two marks are added. Any explicit `cache_control` key
+at the request, system, tool or message-block level (including known nested
+content containers in tool results, search results and content-source documents)
+leaves the entire request's cache choices alone, including null and unrecognized values;
+validation still belongs to the provider. Tool schemas and arguments are
+not cache-control locations. Native streaming does not gain these defaults.
 
 The original reply envelope, complete blocks (including server-tool and
 opaque blocks), text, thinking, signatures, citations, tool arguments,
@@ -60,6 +73,18 @@ uses a real plugin host and local fake vendor, not a live Kiro account.
 A plugin that learns a step's usage only after the step has ended reports it with a later step, in `usage.magpie_deferred` (`prompt_tokens`, `completion_tokens`, `cached_tokens`, `cache_write_tokens`) beside that step's own usage fields. The Cursor plugin does this: a tool step's usage event shows seconds after the step, so the step says 0 and the conversation's next step collects the event ([#1053](https://github.com/yetone/magpie/issues/1053)).
 
 The gateway parses the field into `Usage.Deferred` ([`cUsage`](../../internal/gateway/chat.go)) and adds it only where it bills: the usage records, the OTel attempt spans and route pricing, which prices it as a tier before the request's own ([`routeUsage`](../../internal/gateway/trace.go), [`Usage.billed`](../../internal/gateway/ir.go)). What a client is told stays the request's own, because agents read `prompt_tokens` as how full their context is: the passthrough forwards the plugin's bytes as they are, whose standard fields are the step's own, and a translated reply is encoded from the own count alone. `promptCounted` also reads the request's own. A reply without the field is handled as before. With an older magpie the field is ignored and the owed step goes unbilled in the ledger. [`deferred_usage_test.go`](../../internal/gateway/deferred_usage_test.go) covers the passthrough, the translated reply, the ledger, the OTel span and the pricing tiers.
+
+## Cache a vendor doesn't count
+
+A plugin whose vendor counts no cache tokens says so with `usage.magpie_cache_unknown: true` in its Anthropic usage, and leaves the cache fields out. Kiro does this: it caches on its side (a repeated prompt costs about half the credits), but its replies carry credits and a context share, never tokens (opencode-kiro-auth 0.1.16, zeewell on X). The gateway reads the field in [`aUsage`](../../internal/gateway/anthropic.go) into `Usage.cacheUnknown`, ORed across a reply's usage events. [`routeUsage`](../../internal/gateway/trace.go) then sets `RouteUsage.CacheUnknown` on a try that counted no cache read or write. The Routing page's `promptOf` (`plugins/routing/client.js`) leaves such a try out of the hit rate, so the request shows none, not 0%. The field is never told to a client: `Usage.anthropic()` leaves it out, and a passthrough forwards the plugin's bytes as they are. The usage ledger carries it too ([#3464](https://github.com/yetone/magpie/issues/3464)): the gateway records `usage.Record.CacheUnknown` on a call that counted no cache (`Usage.cacheNotCounted`), the ledger keeps it as row flag 8192 (`rowCacheUnknown`), and `usage.Totals` sums such calls' prompt into `cache_unknown` and their count into `cache_unknown_calls`. Every hit rate leaves that prompt out of its denominator: `Totals.HitRate`, and `cacheHitOf` in app.js, used by the tray panel's card, the Usage page's agent rows and cache tile, the requests' Cache hit rate card (which says how many it left out, `cacheLeftOut`) and each ranking row. One of only such calls shows no rate. A request row's cache cells show "—" and its details say the vendor doesn't count the cache. Calls kept before Kiro's plugin said so carry no flag, so a Kiro call (`kiro` or `kiro-plugin`) with no cache counted is read as one (`usage.CountsNoCache`): in the ledger's `rowChunk.row`, in `Totals.countCache`, and for Routing's history in `pricedRoutes` (`cacheCounted`, `internal/gui/trace.go`). The context view (`internal/gui/context.go`, `context.js`) shows no cache for such a call and doesn't score it as a miss. Not covered: hit rates read from agents' own session files (`sessions.Tokens`: the TUI and CLI session lists, the Sessions tab's totals), which carry Kiro's 0 as a miss. [`cache_unknown_test.go`](../../internal/gateway/cache_unknown_test.go) covers the passthrough and translated replies, both whole and streamed.
+
+The custom native GPT Chat adapter uses the same optional unknown flag in
+Chat usage; [`cUsage`](../../internal/gateway/chat.go) reads it into the same
+internal state. Positive cache counts take precedence over unknown, and
+explicit counted zero remains distinct. This does not change token prices,
+input-token subtraction, or the upstream historical Kiro-record heuristic.
+Native Messages gathering retains the plugin's flag and absent cache fields;
+existing cross-protocol client renderers retain their upstream contract.
 
 ## A plugin's daily check-in
 
@@ -196,6 +221,8 @@ Keep the migration, host, and upstream behavior separate when investigating fail
 The host gets magpie's proxy only as `MAGPIE_*_PROXY` and applies it to each fetch itself (`proxyFor`), and to each HTTP/2 session a plugin opens (`http2.connect`, `tunnel`, #1035). A host on the user's own network goes around that proxy as it does for magpie's own requests (`onLAN` in `host.js`, a port of `internal/netproxy/lan.go`'s: a private, link-local, loopback or CGNAT address, a `.local` name, or a name every address of which is one of those, looked up for 400 ms at most and kept a minute; #1572). A provider's own proxy is still taken as it is. The two rules are kept the same: a change to one is made in the other. A program a plugin starts, such as the Grok plugin's `grok login`, gets it back as `HTTPS_PROXY`/`HTTP_PROXY` from the spawn wrapper in `host.js`, unless the plugin set one. A sign-in that works in the built-in and fails through the plugin may be a host difference like this one, not a plugin bug.
 
 magpie downloads the Bun build for this machine (`bunTarget` in [`bun.go`](../../internal/plugin/bun.go)): the baseline build on x64 Linux and Windows, the native `bun-windows-aarch64` on Windows on ARM (it was turned away as having no build until #2183), and on a musl Linux such as Alpine (`libc.Musl`, the check Claude Code's download uses too) the musl one, `bun-linux-x64-musl-baseline` or `bun-linux-aarch64-musl`. A glibc build names glibc's loader, which Alpine lacks, so it couldn't start there and exec said "no such file or directory" (#1877). A musl Linux keeps its Buns and their `state.json` under `bun/musl`, so a machine whose C library changed never runs the other one's build or takes its set-aside versions; everywhere else they stay in `bun`, where a Bun downloaded before is. A bun that is on disk but can't be started says it is a build for another C library and names `MAGPIE_BUN` (`cantStart`), and it isn't fallen back from or set aside: the version before is the same build. Bun's musl build needs libstdc++ and libgcc; on an Alpine without them, `bun add` and the host's start say which library is missing and `apk add libstdc++ libgcc` (`missingLibs`). `TestBunTargetForMusl`, `TestMuslBunKeptApartFromGlibc`, `TestCantStartSaysCLibrary`, `TestHostOnUnstartableBunSaysCLibrary`, `TestMissingLibsNamesThem` and `TestHostOnBunLackingLibsSaysWhich` in [`bunmusl_test.go`](../../internal/plugin/bunmusl_test.go) cover these.
+
+A bun this machine can't run at all says so instead of its exit status (`wontLoad`, a `*BunUnstartableError`). Windows refuses to load Bun 1.3.14 and later before Windows 10 1809 and Windows Server 2019: they import kernel32's `CreatePseudoConsole`, which older Windows lacks, so the process ends with 0xc0000139 (STATUS_ENTRYPOINT_NOT_FOUND) before it runs (zgcwkj on Discord, a Windows service). A processor without an instruction Bun's x64 build uses (it targets SSE4.2) ends it with 0xc000001d on Windows and SIGILL elsewhere. `bun add`, `bun update` and the host's start (`whyDied`, `cantStart`) each wrap the exit in it. The message says which of the two it is and names `MAGPIE_BUN`. An install doesn't try the community repo's dist branch after it, because that `bun add` can't start either. The GUI's `fail` answers it with code `bun_unstartable`, `bunWhy` (`windows` or `cpu`) and `said`, the i18n.js key for it (`bunSaid` in api.go, kept there so app.js holds one line under its budget), which `api()` in app.js puts through `t()` in place of the English. `TestBunSaidIsTranslated` fails when a language lacks it. There is no fallback to an older Bun: the last one Windows Server 2016 loads, 1.3.13, is below `BunVersion`, and Bun's baseline assets are now the same binary. `TestWontLoadSaysWindowsOrCPU`, `TestInstallOnUnstartableBunSaysWhyAndSkipsDist` and `TestHostOnUnstartableBunSaysWhy` in [`bunload_test.go`](../../internal/plugin/bunload_test.go), `TestFailSaysBunUnstartable` in internal/gui and `plugin-bun-unstartable.test.cjs` (both engines, every language) cover these.
 
 Bun takes only http:// and https:// proxies. A SOCKS5 one, such as a Mac's system SOCKS proxy, is given to every bun magpie starts as a loopback HTTP proxy in front of it (`netproxy.Bridge`): to the host through `hostEnv`, and to `bun add`, `bun update` and `bun remove` through `bunCommand` (`netproxy.EnvForBun`). Before, an install with only a SOCKS system proxy failed as `UnsupportedProxyProtocol` (#1409). An agent CLI that bun installed is updated through the bridge too (`updateEnv` in `internal/agent/cliupdate.go`). Claude Code, built with Bun, gets it for the Claude subscription's runs and sign-ins (`netproxy.EnvForBunWith`, #2651; see [Claude subscription bridge](claude-subscription-bridge.md)).
 

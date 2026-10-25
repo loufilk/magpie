@@ -929,6 +929,8 @@ type cUsage struct {
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 	// Credit is what WorkBuddy says the request cost in its plan's credits
 	Credit *float64 `json:"credit"`
+	// Native Kiro Chat uses the same unknown-cache flag as Messages.
+	CacheUnknown bool `json:"magpie_cache_unknown,omitempty"`
 	// what a plugin's step collected of its conversation's earlier steps,
 	// which their own replies couldn't count (the Cursor plugin's usage
 	// events that showed late, yetone/magpie#1053): billed with the step,
@@ -942,7 +944,7 @@ type cUsage struct {
 }
 
 func (u cUsage) usage() Usage {
-	out := Usage{Output: u.CompletionTokens}
+	out := Usage{Output: u.CompletionTokens, cacheUnknown: u.CacheUnknown}
 	if d := u.PromptTokensDetails; d != nil {
 		out.CacheRead, out.CacheWrite = d.CachedTokens, d.CacheWriteTokens
 	}
