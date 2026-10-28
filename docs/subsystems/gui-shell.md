@@ -258,17 +258,24 @@ CoreText on macOS and Fontconfig on Linux. Discovery is lazy, cached in the
 handler, and refreshed by the menu. It returns names and CSS traits, never
 font files or paths. A failed refresh answers 503 and preserves the previous
 collection; an empty successful collection is distinct from failure.
-A `nogui` build can't read the catalogue and answers 404.
+A `nogui` build can't read the catalogue and answers the app 404.
 
-A browser tab (`magpie web`, or the app's page opened in a browser) has the
-same rows when boot says `fonts` (Norcleeh on Discord). Its choice is the
+A browser tab (`magpie web`, or the app's page opened in a browser) always
+has the same rows (Norcleeh on Discord). Its choice is the
 browser's own, kept in `localStorage` under `magpie.fonts` and applied by
 `fonts.js` before the first paint: the tab can be on another computer, so
-it neither changes nor takes the app's `settings.UIFont`/`CodeFont`. Its
-list is `/api/fonts` less the families the browser doesn't draw
-(`desktopFonts.here`: text in the family measures apart from a generic
-family's on a canvas), so another computer's fonts, and Safari's
-user-installed ones, aren't offered. In a nogui build the rows stay hidden.
+it neither changes nor takes the app's `settings.UIFont`/`CodeFont`. A
+tab's `/api/fonts` is the server's families (none in a nogui build such as
+Docker or `magpie-cli`, and none when reading them fails, never an error)
+plus `commonFamilies` in `internal/gui/fonts.go`, in regular and bold.
+The tab keeps those it draws (`desktopFonts.here`: text in the family
+measures apart from a generic family's on a canvas), so another computer's
+fonts, and Safari's user-installed ones, aren't offered. When none is
+kept, the rows still offer System default. Until 10-28 the rows were
+gated on a boot `fonts` flag, so a nogui server had none, and what
+"flashed and vanished" on a refresh was Text size: the rows a tab never
+shows (Text size, the tray click, Open at login, the menu bar's
+allowances) are `.app-only`, which `body.web` hides before the first paint.
 
 `settings.UIFont` and `settings.CodeFont` keep the family, style name,
 OpenType weight, CSS slope and width percentage. A missing choice keeps the
@@ -506,12 +513,17 @@ then calls `beginHandover` instead of the relaunch-after-exit. The steps:
    serves on it and then acks.
 3. The old one, on the ack (`AwaitAck`), withdraws the pointer, hides
    itself where it can (below), calls `gateway.Server.HandOff`, ends its
-   backend and waits for its requests, then quits. A handed-off server's
-   shutdown waits up to `handedOffDrain` (15 minutes) for requests in
-   flight, not the 2s an ordinary quit gives them (`shortDrain`). Its
-   `OnShutdown` then skips what goes with the gateway, which the new one
-   now does: ending Codex's failover, porting Codex rollouts and installing
-   the update.
+   backend and waits for its requests, then quits. `HandOff` closes the
+   old one's own copy of the socket at once, so every connection from
+   then on waits there for the new one: one the old one took as its end
+   began was closed unanswered (#3568). A handed-off server's shutdown
+   waits up to `handedOffDrain` (15 minutes) for requests in flight, not
+   the 2s an ordinary quit gives them (`shortDrain`), and first lets each
+   connection it took send its first request (`unreadWait`, 5s at most),
+   since `http.Server.Shutdown` closes one whose request it reads after
+   it began. Its `OnShutdown` then skips what goes with the gateway,
+   which the new one now does: ending Codex's failover, porting Codex
+   rollouts and installing the update.
 4. Should the Offer not open, the new version not start, not say hello in
    60s (`helloWait`), not ack in 90s (`ackWait`), or drop the connection,
    the old one keeps the socket, takes its instance lock back and restarts
