@@ -1,5 +1,50 @@
 # 定制源码对齐记录 · 2026-10-28
 
+## 07:07 UTC 最终截止 pin
+
+恢复仓库写权限时，再次只读核查官方 main，固定本轮最终目标为
+[`yetone/magpie@ea53eb1262ed798f93226c1ab2dc478ae990cead`](https://github.com/yetone/magpie/commit/ea53eb1262ed798f93226c1ab2dc478ae990cead)。
+它比下文的 `4c1fb775` 多 10 个提交；本轮不会继续随此后的 tip 无限追赶。
+
+先前已验证的本地候选 `83dea7d1` 已作为远端 checkpoint `92c7d854` 发布，
+tree 同为 `9ccbc857f091d101c7600fd567f0befe99bd60ac`，两个父提交同为
+`65da9f44` 与 `4c1fb775`；不同 SHA 来自 GitHub 对象 API 的作者/时间及
+checkpoint 提交说明，而不是源码差异。
+本次继续从真实远端 checkpoint 三方合并，保持升级分支非强制快进。
+
+新增官方内容主要是免脱敏路由的按需处理、Codex page-state 元数据与原生
+模型列表、中文脱敏词修正、Windows modal/内部滚动行为，以及 moejs 改为
+`github.com/MoeForge/moejs v0.1.0-alpha.11`。许可声明随官方一并保留。
+这些提交没有改动 native Messages gather/cache、Chat unknown-cache、前轮
+错误收集修正或内置 Kiro。同步修正 routing 文档仍称 Messages 一律翻译的
+旧描述，链接到现存定制的 owning contract，而非增加一条实现。
+
+独立 Astra 审查已确认脱敏新路由与定制交界未见阻断：plugin account 不会
+被当作本地免脱敏 provider。之后独立 reviewer 受模型容量限制无法完成余下
+核查，同模型重试仍失败，未换模型；剩余 Codex/依赖交界由实现 owner 核查
+并执行定向测试，不把此段说成完整独立终审。
+
+### 最终 pin 的新增验证
+
+| 检查（Go 含测试与子测试） | 通过 | 失败 / 跳过 |
+| --- | ---: | --- |
+| Gateway 定向：原生定制、脱敏、page-state、Codex 模型列表 | 259 | 0 / 0 |
+| Gateway race 定向 | 227 | 0 / 0 |
+| 新 moejs：middleware / agentplug race | 29 / 7 | 0 / 0 |
+| GUI Codex 模型列表 / 中文脱敏 | 2 / 2 | 0 / 0 |
+
+最终 nogui vet、Linux `CGO_ENABLED=0` 构建、Go 1.26.8 全仓 gofmt、7 个受影响
+JS 文件的语法检查和相对官方 pin 的自定义 diff 空白检查通过。完整增量的
+空白检查只指出官方 `THIRD_PARTY_NOTICES:391` 的额外 EOF 空行；许可文件与
+官方 blob 完全相同，原样保留，没有为消除此提示改动许可声明。36 个定制/附加
+文件高置信秘密模式扫描无发现。GUI 两项为 Go fixture，不是浏览器验证；
+JS syntax 也不等于 Windows/modal/滚动的真实视觉或端到端验证。
+
+原生 gather/cache、Chat、Kiro 及历史记录与验证过的 checkpoint 逐字节相同；
+Kiro 的 165 项结果仍是下文06:13阶段的新跑结果，未将它重复计为本阶段执行。
+此前的 Unix socket 环境阻塞保留，未再尝试绕过或当作通过。没有付费模型
+调用、部署或运行配置变化。GitHub CI 须以最终发布 head 的实际检查为准。
+
 ## 06:13 UTC 增量对齐
 
 本次从已交付的 `65da9f44a9da771f147771e5bd60c6f2768ffaf8` 继续三方合并，
