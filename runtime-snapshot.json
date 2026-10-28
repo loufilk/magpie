@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "version": "v0.1.1364.chuanapi.kiro.4b966158.20261025",
+  "verified_date": "2026-10-28",
+  "host": {
+    "source_commit": "4b9661584f9db5e6cae2d55a33bc0c94ae076886",
+    "source_tree": "56cab0157ff4a3a95030408c19f7a27a26e15d90",
+    "source_archive_sha256": "2e4ca152ca9b43b06b404b45569d3640878ec3e394857799571a42bc39920097",
+    "binary_sha256": "89c5da12feb2a4a3107abbe693f10685294091084196c061571eaf4969477190",
+    "go_version": "1.27.3",
+    "cgo_enabled": false,
+    "build_tags": [
+      "nogui"
+    ],
+    "build_flags": [
+      "-trimpath",
+      "-ldflags",
+      "-s -w -X main.version=v0.1.1364.chuanapi.kiro.4b966158.20261025"
+    ]
+  },
+  "kiro": {
+    "source_repository": "https://github.com/1057300248/plugins",
+    "upstream_repository": "https://github.com/magpie-community/plugins",
+    "source_commit": "780aa7a717bbab5a2e74a7f12e0cbd8b66d9a13a",
+    "source_directory": "packages/kiro",
+    "source_archive_sha256": "b90237c2be5f0f94e8d0c90a7b9f3aa096245569aed3e9675713c7ccf8ce9d3a",
+    "package_version": "0.1.16",
+    "directory": "local-plugins/kiro",
+    "bun_version_used_for_deployment_validation": "1.4.3",
+    "files": [
+      {
+        "path": "local-plugins/kiro/LICENSE",
+        "sha256": "5e8730b694ba31696dd68d693f8bf5e2c75f7e40fd5f6fbc3f067cf9490b24fb",
+        "git_blob": "e6bc674fe754064cf69682d9960d7e98d0354038"
+      },
+      {
+        "path": "local-plugins/kiro/README.md",
+        "sha256": "1208d1183d3ba4ba8325dae1619001280c43af34f22f144af8f6a93cf0c120ac",
+        "git_blob": "7508141b8230e6ec448420edf249f723f08b0b68"
+      },
+      {
+        "path": "local-plugins/kiro/accounts.test.mjs",
+        "sha256": "47c676d60519994e2f8715e93394f2ef3c0c7881bc5e3bad0c34cf60215956b4",
+        "git_blob": "c80f0385260eeb0c718f9042371ed709592911b5"
+      },
+      {
+        "path": "local-plugins/kiro/apikey.test.mjs",
+        "sha256": "aafe03a03dea17b2087486dadaa47b34a4612ef42e3897c3697ec612e3536129",
+        "git_blob": "4cff5587c0cf0ff056daa67df7ae66070eba0ddb"
+      },
+      {
+        "path": "local-plugins/kiro/builderid.test.mjs",
+        "sha256": "ffc025ac8b9e89d6f265a40a4866bb4a8da0ed6347db6fede42baeccc16742d5",
+        "git_blob": "c813f405f885890707ca07466bcb08c3e9f042df"
+      },
+      {
+        "path": "local-plugins/kiro/cache-points.test.mjs",
+        "sha256": "81f4e1a81a02ce6561144469440649e9714de59316fb5595e8b5c936a777e763",
+        "git_blob": "da4a278824aa982d6853e76e92a5b5303a2620ab"
+      },
+      {
+        "path": "local-plugins/kiro/cache-unknown.test.mjs",
+        "sha256": "44f13b00ba9c7dfad9d30a1d39d8299ae98cf32664aeb0f15e4e655211b26245",
+        "git_blob": "21081a42a8aa6b7460839cb2524f142498614f21"
+      },
+      {
+        "path": "local-plugins/kiro/chat.test.mjs",
+        "sha256": "60d07b114fe4fe75746504e43340bd24e402e0733a51d0f5e249c373a4b82b1d",
+        "git_blob": "82c4e2692518f8eb93a594db6909e213360bcf29"
+      },
+      {
+        "path": "local-plugins/kiro/effort.test.mjs",
+        "sha256": "bb7ea9af5844b4880a7e767390e9f7bfb254e7924936198374be6c1c12d60b5d",
+        "git_blob": "8ca6a4f4c3996712b34585cc77d82366823c0964"
+      },
+      {
+        "path": "local-plugins/kiro/errors.test.mjs",
+        "sha256": "1b93c080e4c254266ea24c2cc6207a247654fb1b0e9eda7ac9e203719cb52e28",
+        "git_blob": "4f74412e9b5a0d2b8495a15f1c196da964b8d20c"
+      },
+      {
+        "path": "local-plugins/kiro/index.mjs",
+        "sha256": "669a4d75df1edca7c51a772ec80e6b14117345dd7840605ad584dd5b59a65909",
+        "git_blob": "3748e18b9f220337630435e2db4f8ade9dce2eca"
+      },
+      {
+        "path": "local-plugins/kiro/input-counts.test.mjs",
+        "sha256": "e0fa88ad2e254ea8e5f844b5670486d0348253abd25d8daa3d9ada5d54b23a80",
+        "git_blob": "9a061cf850ba9ffa0bd1d6313ac2b9445604a513"
+      },
+      {
+        "path": "local-plugins/kiro/package.json",
+        "sha256": "a1c51eeeb570636e0e3aad96c53a8528ddd6dcdf4e594a4ec7be9479c715ba58",
+        "git_blob": "24265b4b2fba7982f983ecd825197f65fa44d744"
+      },
+      {
+        "path": "local-plugins/kiro/refresh.test.mjs",
+        "sha256": "74b68b99e097b7d593f01b46b1662ca1d195cafe6ec0975d78e33f4ec3389a65",
+        "git_blob": "1f1390057eb454718ebb0146897b65f16db01f39"
+      },
+      {
+        "path": "local-plugins/kiro/split-calls.test.mjs",
+        "sha256": "174fbadcb583cac00ea342dc05c5f4626ccd7d9ab47a99a5481acf27bfee32c9",
+        "git_blob": "5afb737762681e2b135a0bd9e7e4be8f751b398c"
+      },
+      {
+        "path": "local-plugins/kiro/structured-output.test.mjs",
+        "sha256": "d03c5561ceec696a6ced1a0323ce1a1d6bd9acbe0be0cfa0927075ee98ce6ea8",
+        "git_blob": "04e8f05b47340fa8d3445ef371b654b1ed4970f3"
+      },
+      {
+        "path": "local-plugins/kiro/tool-images.test.mjs",
+        "sha256": "c1e84ed060eae07db7a5f0a4ebd795bfb8a1a3f2d2e7eb688a132ddfe00ee596",
+        "git_blob": "91b5310ad1dbeb66ab77bc3b11e9ed024d15ea70"
+      },
+      {
+        "path": "local-plugins/kiro/tool-names.test.mjs",
+        "sha256": "f729c5c65e36f1fe0d4391bb3b187ded4861bf4faab1fd834f74157c0aade572",
+        "git_blob": "63fb6dbc6f56ad16ca8dbba2caf5be847ab4f39c"
+      },
+      {
+        "path": "local-plugins/kiro/usage.test.mjs",
+        "sha256": "6bf38cddf77d8c9931fca2b5eca4a8cb8cb2d1005d631cabd82391151027c666",
+        "git_blob": "291d9179db18ef4075ebc8eb9e64244e7479c541"
+      }
+    ]
+  }
+}
