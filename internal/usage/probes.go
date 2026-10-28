@@ -1,9 +1,12 @@
 package usage
 
 import (
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/yetone/magpie/internal/probelog"
+	"github.com/yetone/magpie/internal/provider"
 )
 
 // SourceProbe is Record.Source for a request magpie sent a provider on its
@@ -54,8 +57,19 @@ func clipProbeError(s string) string {
 // probeChunk is the probes made since since as one chunk of the request
 // log's rows, each in the order its line has in the log as a gateway
 // row's is; nil for none.
-func probeChunk(probes []probeRow, since time.Time) *rowChunk {
+// A provider renamed since is listed by the id it has now (Renames): the
+// Requests page's provider list named a renamed one twice (cybercaius).
+// One asked while a provider was being added, under its host, is listed
+// by the id of the provider on that host (Renames.ProbeOf), and once no
+// provider is on it, a deleted one's, by the id the log's calls to that
+// host were made under (hosts, logSnapshot.hosts): cybercaius on Discord,
+// a deleted provider's tests were listed under its host beside its id.
+// A host no provider was on goes by its site (provider.SiteOf) the same
+// way: CyberCaius again, Leee's model list asked at leee.baby before it
+// was saved on another host of that site.
+func probeChunk(probes []probeRow, since time.Time, renames provider.Renames, hosts map[string]string) *rowChunk {
 	var c *rowChunk
+	sites := sync.OnceValue(func() map[string]string { return sitesOf(hosts) })
 	for _, p := range probes {
 		if !since.IsZero() && p.Time.Before(since) {
 			continue
@@ -63,11 +77,56 @@ func probeChunk(probes []probeRow, since time.Time) *rowChunk {
 		if c == nil {
 			c = &rowChunk{}
 		}
-		c.add(Row{Record: p.Record, Source: SourceProbe}, "", p.off, false)
+		r := p.Record
+		r.Provider = probeProvider(r, renames, hosts, sites)
+		c.add(Row{Record: r, Source: SourceProbe}, "", p.off, false)
 	}
 	if c == nil {
 		return nil
 	}
 	c.dict, c.shapeIDs = nil, nil
 	return c
+}
+
+// sitesOf is hosts by site (provider.SiteOf): the provider the log's
+// calls to that site went to, "" for a site two providers' calls went to.
+func sitesOf(hosts map[string]string) map[string]string {
+	out := map[string]string{}
+	for h, id := range hosts {
+		site := provider.SiteOf(h)
+		if site == "" {
+			continue
+		}
+		if to, ok := out[site]; ok && to != id {
+			id = ""
+		}
+		out[site] = id
+	}
+	return out
+}
+
+// probeProvider is the provider a probe row is listed under: its id as it
+// is now, and for one recorded under its host before the provider had an
+// id, the provider saved on that host, or, with none on it now, the one
+// the log's calls to that host went to; with neither, the same by the
+// host's site. A host or site two providers were on, or none, stays the
+// host.
+func probeProvider(r Record, renames provider.Renames, hosts map[string]string, sites func() map[string]string) string {
+	id := renames.ProbeOf(r.Provider, r.Time)
+	if id != r.Provider || !strings.EqualFold(r.Provider, r.Host) || renames.OnHost(r.Host) {
+		return id
+	}
+	if to := hosts[strings.ToLower(r.Host)]; to != "" {
+		return renames.Of(to, r.Time)
+	}
+	if to, on := renames.OnSite(r.Host); on {
+		if to != "" {
+			return to
+		}
+	} else if site := provider.SiteOf(r.Host); site != "" {
+		if to := sites()[site]; to != "" {
+			return renames.Of(to, r.Time)
+		}
+	}
+	return strings.ToLower(id) // one host, however it was typed
 }
