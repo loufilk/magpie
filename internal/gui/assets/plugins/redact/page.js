@@ -1,11 +1,27 @@
 // Insights › Masking's code (client.js has its markup and hooks): run after
 // app.js, whose masking helpers it shares (maskTip, maskColor,
 // maskShape, maskValue: Settings' Try it and the masked calls' badges use
-// them too). What a placeholder stood for is in this magpie's memory alone,
-// never on disk, so after a restart it is gone; so is the text a request
-// went out with (/api/masking/sent), kept for the newest requests only.
+// them too; Try it uses this page's maskMatches in turn). What a
+// placeholder stood for is in this magpie's memory alone, never on disk,
+// so after a restart it is gone; so is the text a request went out with
+// (/api/masking/sent), kept for the newest requests only.
 
 const stillMotion = calm;
+// maskMatches is text's stand-ins as matchAll gives them: its {{…}}
+// placeholders, and the made-up keys "Keep a key's form" sent (redact's
+// shape.go), the keys of info that are no placeholder, which only the
+// record's own list tells from the text around them (#3599)
+const maskLookRes = new WeakMap();
+function maskMatches(text, info) {
+  let re = maskLookRes.get(info);
+  if (!re) {
+    const looks = [...info.keys()].filter((p) => p && !p.startsWith("{{")).sort((a, b) => b.length - a.length)
+      .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    re = looks.length ? new RegExp(PLACEHOLDER.source + "|" + looks.join("|"), "g") : PLACEHOLDER;
+    maskLookRes.set(info, re);
+  }
+  return text.matchAll(re);
+}
 // the providers' names, read once when the page opened before any page
 // that loads them
 let maskProv = null, maskProvAsked = false;
@@ -62,7 +78,7 @@ function maskPageOpen() {
   // a masked call in the tray panel opens the window on its request
   if (!maskKeyRead) {
     maskKeyRead = true;
-    const k = +params.get("key");
+    const k = params.get("key");
     if (k) {
       const q = new URLSearchParams(location.search);
       q.delete("key");
@@ -251,12 +267,12 @@ function maskFlow(sum, move) {
     for (const r of rows) {
       const b = el("button", "mo-node" + (r.id && maskL[kind] === r.id ? " on" : ""));
       b.type = "button";
-      // its logo on the side the lines are: an agent's after its name, a
-      // provider's before it; "N more" keeps the room so the names line up
+      // its logo first, then its name, on both sides; "N more" keeps the
+      // logo's room so the names line up
       const ic = r.id ? icon(r.icon || "generic") : el("span", "ic");
       const tx = el("span", "tx");
       tx.append(el("span", "nm", r.name), el("span", "ct", fmtN(r.n)));
-      b.append(...(kind === "agent" ? [tx, ic] : [ic, tx]));
+      b.append(ic, tx);
       if (r.id) {
         b.title = t("Show what {name} sent masked", { name: r.name });
         b.onclick = () => maskNarrow({ [kind]: maskL[kind] === r.id ? "" : r.id });
@@ -301,7 +317,9 @@ function maskFlow(sum, move) {
           if (q === ks[i] >> 1 && !still) for (let k = 0, dots = 1 + Math.round(2 * r.n / max); k < dots; k++) {
             const dur = 1.7 + i * .5, begin = (out ? dur : 0) + k * 2 * dur / dots + "s";
             const z = out ? 1.8 : 1.7, dot = add("rect", { x: -z, y: -z, width: 2 * z, height: 2 * z, rx: out ? .6 : z, class: "mo-dot" + (out ? " out" : "") });
-            const a = { dur: dur + "s", begin, repeatCount: "indefinite" };
+            // twice round when drawn, not forever: an endless motion lays the
+            // page out each frame, ~16% of a core while it sits open (#3185)
+            const a = { dur: dur + "s", begin, repeatCount: 2 };
             add("animateMotion", { path: d, ...a }, dot);
             add("animate", { attributeName: "opacity", values: "0;1;1;0", keyTimes: "0;.1;.85;1", ...a }, dot);
           }
@@ -383,7 +401,7 @@ function maskRefresh() {
   const seq = maskSeq;
   return api(maskQuery(0)).then((r) => {
     if (seq !== maskSeq || !maskL.records.length) return;
-    const fresh = (r?.records || []).filter((x) => x.key > maskL.records[0].key);
+    const fresh = (r?.records || []).filter((x) => BigInt(x.key) > BigInt(maskL.records[0].key));
     if (!fresh.length) return;
     maskL.records = [...fresh, ...maskL.records];
     if (!maskO) drawMaskList();
@@ -453,7 +471,38 @@ function drawMaskList() {
     more.onclick = () => maskFetch(true);
     foot.append(more);
   }
+  // what was kept goes whole, after a confirm: maxyou2090's strict masking
+  // had kept far more than he wanted to keep
+  if (maskL.records.length || maskSum?.requests) {
+    const clear = el("button", "text msk-clear", t("Clear records…"));
+    clear.type = "button";
+    clear.disabled = maskL.busy || maskClearing;
+    clear.onclick = maskClear;
+    foot.append(clear);
+  }
   box.append(foot);
+}
+let maskClearing = false;
+async function maskClear() {
+  const ok = await confirmAction(t("Clear masking records?"),
+    t("Every request's record of what was masked is deleted from this computer. Masking stays as it is, and requests from now on are recorded again."),
+    t("Clear"));
+  if (!ok) return;
+  maskClearing = true;
+  drawMaskList();
+  try {
+    await api("masking/clear", {});
+    status(t("Masking records cleared"), "ok", 1500);
+  } catch (e) {
+    // what could not be deleted is still listed below
+    status(t(e.message), "err");
+  }
+  maskClearing = false;
+  if (maskO) maskOneClose();
+  maskSeq++;
+  Object.assign(maskL, { records: [], more: false, busy: false, read: false, error: "" });
+  maskDrawn = "";
+  return maskPageLoad(true);
 }
 
 function maskRequestList(box) {
@@ -546,7 +595,8 @@ function maskOneOpen(key, r) {
   if (!key) return;
   maskTipOff();
   const o = maskO = { key, r: r || maskL.records.find((x) => x.key === key) || null, sent: undefined, leaves: null, vals: new Map(), view: "both", pick: "", open: new Set(), whole: new Set() };
-  $("#maskCard").hidden = $("#maskList").hidden = true;
+  $("#maskCard").hidden = $("#maskList").hidden = $("#maskDemo").hidden = true;
+  xqd?.wake();
   $("#maskOne").hidden = false;
   drawMaskOne();
   (o.r ? Promise.resolve(o.r) : api("masking/record?key=" + key))
@@ -574,7 +624,8 @@ function maskOneClose() {
   maskO = null;
   $("#maskOne").hidden = true;
   $("#maskOne").replaceChildren();
-  $("#maskCard").hidden = $("#maskList").hidden = false;
+  $("#maskCard").hidden = $("#maskList").hidden = $("#maskDemo").hidden = false;
+  xqd?.wake();
   drawMaskList();
 }
 
@@ -709,7 +760,7 @@ function maskBlocked(r) {
 // got them or, here, as they were written
 function maskInk(into, text, here, o, info) {
   let at = 0;
-  for (const m of text.matchAll(PLACEHOLDER)) {
+  for (const m of maskMatches(text, info)) {
     const x = info.get(m[0]);
     if (!x) continue;
     into.append(document.createTextNode(text.slice(at, m.index)));
@@ -731,7 +782,7 @@ function maskInk(into, text, here, o, info) {
 // side, the rest left out
 function maskWindows(text, info) {
   const rs = [];
-  for (const m of text.matchAll(PLACEHOLDER)) if (info.has(m[0])) rs.push([Math.max(0, m.index - 120), Math.min(text.length, m.index + m[0].length + 120)]);
+  for (const m of maskMatches(text, info)) if (info.has(m[0])) rs.push([Math.max(0, m.index - 120), Math.min(text.length, m.index + m[0].length + 120)]);
   const out = [];
   for (const r of rs) {
     const last = out.at(-1);
@@ -761,19 +812,23 @@ function maskContent(r, o, info) {
     items = [];
     let fold = null;
     for (const l of o.leaves) {
-      const changed = [...l.text.matchAll(PLACEHOLDER)].some((m) => info.has(m[0]));
+      const changed = [...maskMatches(l.text, info)].some((m) => info.has(m[0]));
       if (changed) { fold = null; items.push({ leaf: l }); continue; }
       if (!fold) items.push(fold = { fold: [] });
       fold.fold.push(l);
     }
   } else {
-    // only the lines around each value are left: the request's whole text
-    // was in memory, and is no longer
-    if (!r.blocked) sec.append(el("p", "msk-gone", o.vals.size
+    // only the lines around each value are left, while memory has the
+    // record: the request's whole text was in memory, and is no longer
+    items = maskSnipTexts(r).map((text) => ({ leaf: { path: "", role: "", text } }));
+    if (items.length && !r.blocked) sec.append(el("p", "msk-gone", o.vals.size
       ? t("This request's whole text is no longer in memory: magpie keeps it for the newest requests only. The lines around each value are still here.")
       : t("What was written is kept in memory only, and magpie has restarted since. Still here: each value's kind, length and first characters, and the line around each placeholder as the vendor got it.")));
-    items = maskSnipTexts(r).map((text) => ({ leaf: { path: "", role: "", text } }));
-    if (!items.length) sec.append(el("div", "msk-none", t("The text around them was kept in memory only, and magpie has restarted since")));
+    // after a restart nothing of the text is left, by design: the record on
+    // disk never holds it (maskrec), so no folder or volume brings it back
+    // (brianeee2 on X, in Docker). A request held back sent nothing, and
+    // its card says so.
+    else if (!items.length && !r.blocked) sec.append(el("p", "msk-gone", t("This request's text and the values masked in it were kept in memory only, never on disk, and magpie has restarted since. The record keeps each value's kind, length and first characters.")));
   }
   const list = el("div", "msk-msgs" + (view === "both" ? " both" : ""));
   if (view === "both") {
@@ -804,7 +859,7 @@ function maskContent(r, o, info) {
       return list.append(f);
     }
     const l = it.leaf, m = el("div", "msk-msg");
-    const n = [...l.text.matchAll(PLACEHOLDER)].filter((x) => info.has(x[0])).length;
+    const n = [...maskMatches(l.text, info)].filter((x) => info.has(x[0])).length;
     const mh = el("div", "msk-mhead");
     if (l.role) mh.append(el("span", "msk-role", l.role));
     if (l.path) mh.append(el("span", "msk-path", l.path));
@@ -845,7 +900,7 @@ function maskHow(r, o, info) {
   head.append(el("h2", "", t("How it was masked")), el("span", "msk-hint", t(vs.length === 1 ? "1 value" : "{n} values", { n: fmtN(vs.length) }) + " · " + t(r.n === 1 ? "1 place" : "{n} places", { n: fmtN(r.n) })));
   aside.append(head);
   const where = new Map();
-  for (const l of o.leaves || []) for (const m of l.text.matchAll(PLACEHOLDER)) if (info.has(m[0]) && l.path) {
+  for (const l of o.leaves || []) for (const m of maskMatches(l.text, info)) if (info.has(m[0]) && l.path) {
     const w = where.get(m[0]) || new Set();
     w.add(l.path);
     where.set(m[0], w);

@@ -1,17 +1,19 @@
-# 当前运行版本的源码快照
+# 历史运行版本的源码快照
 
-本分支保存 2026-10-28 核实的运行版本 `v0.1.1364.chuanapi.kiro.4b966158.20261025`。
+本文件与 `runtime-snapshot.json` 记录 2026-10-28 归档时核实的运行版本
+`v0.1.1364.chuanapi.kiro.4b966158.20261025`，不代表后续分支 HEAD 已部署。
+当前源码的上游对齐与新跑验证见 [UPSTREAM_ALIGNMENT.md](UPSTREAM_ALIGNMENT.md)。
 
 | 部分 | 固定版本 | 本分支位置 |
 | --- | --- | --- |
-| Magpie 主程序 | `4b9661584f9db5e6cae2d55a33bc0c94ae076886` | 仓库原有源码；本次打包提交以该提交为父提交 |
-| Kiro 插件 | `780aa7a717bbab5a2e74a7f12e0cbd8b66d9a13a`，包版本 `0.1.16` | `local-plugins/kiro/` |
+| Magpie 主程序 | `4b9661584f9db5e6cae2d55a33bc0c94ae076886` | 归档提交 `b213aecf` 的父提交 |
+| Kiro 插件 | `780aa7a717bbab5a2e74a7f12e0cbd8b66d9a13a`，包版本 `0.1.16` | 归档提交 `b213aecf` 下的 `local-plugins/kiro/` |
 
 本次打包只新增 Kiro 插件源码、其原有 MIT 许可证和这份版本说明及
 `runtime-snapshot.json`，不修改主程序源码。插件目录包含原始测试文件，
 其文件哈希列在清单中；`index.mjs` 的 SHA256 与实际运行文件一致。
 
-## 构建与插件注册
+## 历史构建与插件注册（仅适用归档提交）
 
 部署时使用 Go 1.27.3、`CGO_ENABLED=0` 和以下主程序构建命令：
 
@@ -21,12 +23,14 @@ CGO_ENABLED=0 go build -tags nogui -trimpath \
   -o magpie .
 ```
 
-该命令记录源码构建方法；平台与工具链差异可能影响产物哈希，不能据此保证
+该命令仅记录归档源码的构建方法；不要给本轮更新后的源码使用上述旧版本号。
+平台与工具链差异可能影响产物哈希，不能据此保证
 新构建逐字节复现原二进制。原二进制 SHA256 保存在清单中。
 
 通过 Magpie 的本地插件注册机制选择 `local-plugins/kiro` 的绝对路径。
-仅保存这个目录不会自动启用插件。应使用本分支的固定源码，避免以 npm 最新版
-替代该定制版本。插件的使用说明见 [Kiro README](local-plugins/kiro/README.md)。
+仅保存这个目录不会自动启用插件。复现历史版本时应使用归档提交 `b213aecf`
+的固定源码，避免以当前源码或 npm 最新版替代。当前插件说明见
+[Kiro README](local-plugins/kiro/README.md)。
 
 ## 验证范围
 

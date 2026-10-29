@@ -4,8 +4,51 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 )
+
+// gatheredThinkingNeeded is the explicit refusal of a Messages stream that
+// started no blocks. Native thinking and opaque output are kept conservative:
+// a block isn't empty just because the translator doesn't know it.
+// The first error decides, as it does in gathered.streamFailure.
+func gatheredThinkingNeeded(body []byte) bool {
+	seen, needed := false, false
+	err := readSSE(bytes.NewReader(body), func(event, data string) error {
+		var e struct {
+			Type    string `json:"type"`
+			Message obj    `json:"message"`
+		}
+		if json.Unmarshal([]byte(data), &e) != nil {
+			return io.EOF
+		}
+		if e.Type == "" {
+			e.Type = event
+		}
+		switch e.Type {
+		case "error":
+			ev := "event: " + event + "\ndata: " + strings.ReplaceAll(data, "\n", "\ndata: ")
+			kind, _, detail := streamEvent([]byte(ev))
+			if kind != eventError {
+				return io.EOF // a policy refusal isn't a request to enable thinking
+			}
+			if !seen {
+				needed = thinkingNeededRefusal.Match(wordsOf([]byte(detail)))
+				seen = true
+			}
+		case "ping":
+		case "message_start":
+			var content []json.RawMessage
+			if seen || str(e.Message, "type") != "message" || json.Unmarshal(e.Message["content"], &content) != nil || len(content) != 0 {
+				return io.EOF
+			}
+		default:
+			return io.EOF
+		}
+		return nil
+	})
+	return err == nil && needed
+}
 
 // gatherMessages assembles a native Messages stream without translating its
 // request or its reply blocks through the cross-protocol representation.

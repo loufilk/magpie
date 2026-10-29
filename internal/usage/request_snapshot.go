@@ -44,7 +44,7 @@ func (c *rowChunk) pack() *rowChunk {
 	next.Count = len(c.Rows) // what rowsIn says of it
 	next.Rows, next.Strings, next.Shapes, next.dict, next.shapeIDs = nil, nil, nil, nil, nil
 	next.Archive, next.Locations = encoded, locations
-	next.Bytes = int64(len(next.Archive)+len(locations)*8) + codexActorBytes(next.codexActors)
+	next.Bytes = int64(len(next.Archive)+len(locations)*8) + next.codexActors.bytes()
 	return &next
 }
 
@@ -96,6 +96,7 @@ func (c *rowChunk) encode(keep func([]byte) bool) ([]byte, []*time.Location) {
 		put(uint64(p.Status))
 		put(uint64(p.Flags))
 		put(uint64(p.Tries))
+		put(uint64(p.Masking))
 		if p.Flags&rowCredits != 0 {
 			put(math.Float64bits(p.Credits))
 		}
@@ -149,15 +150,15 @@ func decodeMapped(m *diskMapping, dst, src []byte) (data []byte, ok bool) {
 // unpackInto is unpack decoding the rows into rows when it is large enough:
 // every field of a row is written, so a reused slice needs no clearing.
 func (c *rowChunk) unpackInto(into []packedRow) *rowChunk {
-	return c.unpackReusing(into, nil, nil, nil)
+	return c.unpackReusing(nil, into, nil, nil, nil)
 }
 
 // unpackReusing is unpackInto decoding the strings' and shapes' slices into
 // strs and shapes too, when they are large enough: for a reader that lets
 // go of a chunk's rows before it opens the next (chunkRows). With lent, the
 // block is decoded into *lent and the strings are of it, not a copy: they
-// are good until *lent is decoded into again.
-func (c *rowChunk) unpackReusing(into []packedRow, strs []string, shapes [][rowTexts]uint32, lent *[]byte) *rowChunk {
+// are good until *lent is decoded into again. The chunk is dst, when given.
+func (c *rowChunk) unpackReusing(dst *rowChunk, into []packedRow, strs []string, shapes [][rowTexts]uint32, lent *[]byte) *rowChunk {
 	if c == nil || len(c.Archive) == 0 {
 		return c
 	}
@@ -185,7 +186,11 @@ func (c *rowChunk) unpackReusing(into []packedRow, strs []string, shapes [][rowT
 	if rows > uint64(len(data)) || count > uint64(len(data)) {
 		return nil
 	}
-	next := *c
+	next := dst
+	if next == nil {
+		next = new(rowChunk)
+	}
+	*next = *c
 	next.Archive, next.Locations, next.mapped = nil, nil, nil
 	if uint64(cap(into)) >= rows {
 		next.Rows = into[:rows]
@@ -197,7 +202,7 @@ func (c *rowChunk) unpackReusing(into []packedRow, strs []string, shapes [][rowT
 	} else {
 		next.Strings = make([]string, int(count))
 	}
-	next.Bytes = int64(len(next.Rows))*int64(unsafe.Sizeof(packedRow{})) + codexActorBytes(next.codexActors)
+	next.Bytes = int64(len(next.Rows))*int64(unsafe.Sizeof(packedRow{})) + next.codexActors.bytes()
 	// The strings are copied out in one piece: one allocation a block, not
 	// one a string. The section is walked once to find its end, and its
 	// copy again to cut the strings from it.
@@ -281,6 +286,7 @@ func (c *rowChunk) unpackReusing(into []packedRow, strs []string, shapes [][rowT
 		p.FirstReasoning = int64(take())
 		p.Cost, p.Status, p.Flags = math.Float64frombits(take()), int32(take()), uint16(take())
 		p.Tries = int32(take())
+		p.Masking = int32(take())
 		p.Credits = 0
 		if p.Flags&rowCredits != 0 {
 			p.Credits = math.Float64frombits(take())
@@ -289,5 +295,5 @@ func (c *rowChunk) unpackReusing(into []packedRow, strs []string, shapes [][rowT
 	if !valid || len(data) != 0 {
 		return nil
 	}
-	return &next
+	return next
 }

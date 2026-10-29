@@ -3,6 +3,7 @@ package gateway
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -39,11 +40,19 @@ func (g *gathered) Write(b []byte) (int, error) { return g.buf.Write(b) }
 // finish writes the native reply to w. Messages is assembled by
 // gatherMessages; Responses uses response.completed (or response.incomplete),
 // its output filled from the stream's items, or else its text, when empty.
-// A complete reply that came whole goes as it came. A stream that failed,
-// or ended before saying its reply had, is a 502, as a translated one is
-// (TestNonStreamEndedShort), never an empty 200.
+// A complete reply that came whole goes as it came. A vendor's error has
+// the status it stands for, as on the ungathered path. A malformed or cut
+// reply is a 502 (TestNonStreamEndedShort), never an empty 200.
 func (g *gathered) finish(w http.ResponseWriter, p provider.Provider, sse bool, cut string, failed string) (int, string) {
 	if !sse {
+		if status, msg, ok := errorReply(g.buf.Bytes()); ok {
+			// A whole 200's policy error stays on its existing path. A
+			// new error status would make holdWriter reclassify its code
+			// as a stream's filter refusal, which the whole 200 wasn't.
+			if _, policy := policyRefusal(g.buf.Bytes()); !policy {
+				return writeVendorError(w, g.proto, status, msg, g.buf.Bytes()), msg
+			}
+		}
 		if g.proto == provider.Anthropic {
 			msg := failed
 			if msg == "" {
@@ -79,7 +88,7 @@ func (g *gathered) finish(w http.ResponseWriter, p provider.Provider, sse bool, 
 			if msg == "" {
 				msg = p.Name + ": " + err.Error()
 			}
-			return writeError(w, provider.Anthropic, 502, msg), msg
+			return g.streamFailure(w, p, msg)
 		}
 		for _, k := range []string{"Request-Id", "X-Request-Id"} {
 			if v := g.h.Get(k); v != "" {
@@ -133,7 +142,7 @@ func (g *gathered) finish(w http.ResponseWriter, p provider.Provider, sse bool, 
 		case msg == "":
 			msg = p.Name + ": the reply ended before it was complete"
 		}
-		return writeError(w, provider.Responses, 502, msg), msg
+		return g.streamFailure(w, p, msg)
 	}
 	if len(items) == 0 && text.Len() > 0 {
 		msg, _ := json.Marshal(map[string]any{"type": "message", "id": "msg_" + newID(), "role": "assistant", "status": "completed",
@@ -150,6 +159,39 @@ func (g *gathered) finish(w http.ResponseWriter, p provider.Provider, sse bool, 
 	w.WriteHeader(http.StatusOK)
 	w.Write(resp)
 	return http.StatusOK, ""
+}
+
+// streamFailure classifies only an explicit vendor error, using the same
+// event reader as a held native stream. Parser/transport diagnostics are
+// never classified by their words; without a vendor error they stay 502.
+// Read the error object, not just the sniffer's message: its type may say
+// it all. The first error wins, as when holdWriter stops its stream.
+func (g *gathered) streamFailure(w http.ResponseWriter, p provider.Provider, msg string) (int, string) {
+	status := http.StatusBadGateway
+	var said []byte
+	readSSE(bytes.NewReader(g.buf.Bytes()), func(event, data string) error {
+		ev := "event: " + event + "\ndata: " + strings.ReplaceAll(data, "\n", "\ndata: ")
+		kind, code, detail := streamEvent([]byte(ev))
+		if kind == eventRefusalError {
+			status, msg = code, p.Name+": "+detail
+			w.Header().Set(refusedHeader, detail)
+			_, _, said = filterRefused(data)
+			return io.EOF
+		}
+		if kind != eventError {
+			return nil
+		}
+		status = code
+		said = []byte(data)
+		if json.Valid([]byte(detail)) {
+			// streamEvent's detail is the vendor's error object (including
+			// response.failed's nested one), not its response envelope.
+			said = []byte(`{"error":` + detail + `}`)
+		}
+		msg = p.Name + ": " + provider.APIError(said, "upstream stream failed")
+		return io.EOF
+	})
+	return writeVendorError(w, g.proto, status, msg, said), msg
 }
 
 // withStreamedOutput is resp with the stream's items as its output when

@@ -85,6 +85,8 @@ type chunkPart struct {
 	cells []pageCell
 	kept  int       // rows the filter keeps
 	first time.Time // the oldest charted row's time
+	// days are the heatmap's sums of the chunk, oldest first (heatOf)
+	days []Day
 }
 
 // partKey is what a chunk's cells are of besides the chunk: the page's
@@ -103,6 +105,9 @@ type partCache struct {
 	old, next map[uint64]*chunkPart
 	// pairs is the last pairing of the period, and pairsNext this page's
 	pairs, pairsNext *pairMemo
+	// heatOld is the heatmap's days before its last few the page before
+	// kept, and heatOldNext this page's (heatSplit)
+	heatOld, heatOldNext *heatOld
 }
 
 // partSets bounds the partKeys kept: a page is open on one period and
@@ -287,8 +292,8 @@ func (ps *pairedRows) sigs(identities map[string]sessions.CodexIdentity) map[*ro
 		if c.codexIdentities != nil {
 			h += mix(3)
 		}
-		for i, a := range c.codexActors {
-			if a != "" {
+		for i := range c.codexActors.len() {
+			if a := c.codexActors.at(i); a != "" {
 				h += mix(4, uint64(i), actor(a))
 			}
 		}
@@ -312,6 +317,7 @@ func (ps *pairedRows) partsOf(pass *cellPass, cache *partCache, identities map[s
 	sigs := ps.sigs(identities)
 	parts := make([]*chunkPart, len(ps.all))
 	var rows chunkRows
+	defer rows.release()
 	var r Row
 	for i, c := range ps.all {
 		sig := sigs[c]
@@ -357,6 +363,7 @@ func (ps *pairedRows) newest(f Filter, parts []*chunkPart, take int) newestHeap 
 		return b.Latest.Compare(a.Latest)
 	})
 	var rows chunkRows
+	defer rows.release()
 	var r Row
 	for _, c := range order {
 		if len(selected) == take && !c.Latest.IsZero() && c.Latest.Before(selected[0].at) {

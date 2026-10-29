@@ -32,6 +32,8 @@
     return String(n);
   };
   const pct = (x) => Math.round(x * 100) + "%";
+  // a count of tokens that a redraw counts on from what it said (morph)
+  const num = (tag, cls, n) => { const e = el(tag, cls, fmtK(n)); e.dataset.n = Math.round(n); return e; };
   const median = (xs) => {
     if (!xs.length) return 0;
     const s = [...xs].sort((a, b) => a - b);
@@ -210,11 +212,36 @@
   function morph(old, neu) {
     if (old.nodeName !== neu.nodeName || (old.nodeType !== 1 && old.nodeType !== 3)) { old.replaceWith(neu); return neu; }
     if (old.nodeType === 3) { if (old.data !== neu.data) old.data = neu.data; return old; }
+    // a count (data-n) is counted on from what it said to the new one
+    const from = old._at ?? (old.dataset?.n ? +old.dataset.n : undefined);
     for (const a of [...old.attributes]) if (!neu.hasAttribute(a.name)) old.removeAttribute(a.name);
     for (const a of neu.attributes) if (old.getAttribute(a.name) !== a.value) old.setAttribute(a.name, a.value);
     for (const h of HANDLERS) if (old[h] !== neu[h]) old[h] = neu[h];
     morphKids(old, [...neu.childNodes]);
+    if (neu.dataset?.n) roll(old, from, +neu.dataset.n, fmtK, calm());
     return old;
+  }
+  // roll counts node's text from one number to another as the map's tiles
+  // glide, in their time (flohoeller's map counts up as its window fills);
+  // fmt says a number. quiet, or with nothing to count from, it says the
+  // new one at once
+  function roll(node, from, to, fmt, quiet) {
+    cancelAnimationFrame(node._raf);
+    if (quiet || from === undefined || from === to || !node.isConnected) {
+      delete node._at;
+      if (node.textContent !== fmt(to)) node.textContent = fmt(to);
+      return;
+    }
+    const t0 = performance.now();
+    const step = (now) => {
+      // a frame's time can be before t0 (it is when the frame began)
+      const k = Math.min(1, Math.max(0, (now - t0) / 620));
+      node._at = from + (to - from) * (1 - Math.pow(1 - k, 4));
+      node.textContent = fmt(node._at);
+      if (k < 1) node._raf = requestAnimationFrame(step);
+      else delete node._at;
+    };
+    step(t0);
   }
   function morphKids(box, kids) {
     const old = [...box.childNodes];
@@ -277,7 +304,7 @@
   // to read goes in one tile with the part's other small ones; a part too
   // small for its items is one tile. Each tile: key (stays across draws),
   // kind, its item (it), the items it stands for (its), rect in px.
-  const TILE_MIN = 1500, TILE_MAX = 12, TILE_FLOOR = 700;
+  const TILE_MIN = 1500, TILE_MAX = 12, TILE_FLOOR = 700, TILE_SIDE = 16;
   // the look switch's marks: tiles, and a grid of cells
   const LOOK_MAP = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1.5" y="2" width="5.5" height="12" rx="1.6"/><rect x="8.5" y="2" width="6" height="6.5" rx="1.6"/><rect x="8.5" y="10" width="6" height="4" rx="1.4"/></svg>';
   const LOOK_GRID = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">' +
@@ -301,7 +328,20 @@
       const lo = (sum * TILE_FLOOR) / Math.max(1, area);
       return vals.map((a) => ({ ...a, v: Math.max(a.v, lo) }));
     };
-    for (const r of squarify(floored(parts.map((x) => ({ v: x.tokens, x })), ur[2] * ur[3]), ...ur)) {
+    // and a part's tile is TILE_SIDE px across both ways: the floor is an
+    // area, and a part laid in a long row beside large ones met it as a
+    // strip (49 tokens of memory beside 70K: 190×4px, under the tiles' 3px
+    // gap, so it was hidden; AIGCFREE on Discord). One too thin has its
+    // value raised by as much and the parts are laid again.
+    const partVals = floored(parts.map((x) => ({ v: x.tokens, x })), ur[2] * ur[3]);
+    let partRects = squarify(partVals, ...ur);
+    for (let n = 0; n < 8; n++) {
+      const thin = partRects.filter((r) => Math.min(r.w, r.h) < TILE_SIDE);
+      if (!thin.length) break;
+      for (const r of thin) r.a.v *= (TILE_SIDE / Math.max(1, Math.min(r.w, r.h))) * 1.05;
+      partRects = squarify(partVals, ...ur);
+    }
+    for (const r of partRects) {
       const x = r.a.x;
       const items = (x.items || []).filter((it) => it.tokens > 0).sort((a, b) => b.tokens - a.tokens);
       const isum = items.reduce((s, it) => s + it.tokens, 0);
@@ -461,6 +501,18 @@
       }
       placeTip(n);
     };
+    // the tip told again as its tile grows, and kept over it as it glides
+    const followTip = (n) => {
+      if (!n.isConnected || n.classList.contains("gone")) { tip.hidden = true; return; }
+      showMapTip(n);
+      const t0 = performance.now();
+      const go = (now) => {
+        if (tip.hidden || !n.classList.contains("on")) return;
+        placeTip(n);
+        if (now - t0 < 660) requestAnimationFrame(go);
+      };
+      requestAnimationFrame(go);
+    };
     const tileAt = (e) => {
       const n = e.target.closest?.(".ctx-tile");
       return cur && n && n.parentElement === map && n._tile && !n.classList.contains("gone") ? n : null;
@@ -508,16 +560,28 @@
         n._tile = tl;
         const cls = "ctx-tile " + (tl.free ? "free" : "k-" + tl.kind) + (tl.w < 54 || tl.h < 30 ? " bare" : tl.h < 46 ? " low" : "") + (n.classList.contains("on") ? " on" : "");
         if (n.className !== cls) n.className = cls;
-        let name, v;
-        if (tl.free) { name = t("Free space"); v = fmtK(tl.tokens) + " · " + pct(tl.tokens / Math.max(window, p.tokens, 1)); }
+        // the value counts on to its tokens as the tile glides (roll)
+        let name, v = (x) => fmtK(x) + " · " + partName(tl.kind);
+        if (tl.free) { name = t("Free space"); v = (x) => fmtK(x) + " · " + pct(x / Math.max(window, p.tokens, 1)); }
         else if (tl.it) {
           name = itemName(tl.it);
           if (tl.kind === "files" || tl.kind === "memory") name = name.slice(name.lastIndexOf("/", name.length - 2) + 1) || name;
-          v = fmtK(tl.tokens) + " · " + partName(tl.kind);
-        } else if (tl.key === tl.kind) { name = partName(tl.kind); v = fmtK(tl.tokens); }
-        else { name = t("{n} more", { n: tl.its.length }); v = fmtK(tl.tokens) + " · " + partName(tl.kind); }
+          // a tool's results gathered, how many: "web__run ×20"
+          if (tl.it.n > 1 && tl.it.tag !== "turns" && tl.it.tag !== "more") name += " ×" + tl.it.n;
+        } else if (tl.key === tl.kind) { name = partName(tl.kind); v = fmtK; }
+        else {
+          // the small files gathered: their folder, when they share one
+          // ("src/api/ · 12 files"), as the reader would name them
+          const dirs = new Set(tl.its.map((it) => it.name.slice(0, it.name.lastIndexOf("/") + 1)));
+          const [dir] = dirs;
+          if (tl.kind === "files" && dirs.size === 1 && dir) {
+            name = dir.slice(dir.lastIndexOf("/", dir.length - 2) + 1);
+            v = (x) => fmtK(x) + " · " + t("{n} files", { n: tl.its.length });
+          } else name = t("{n} more", { n: tl.its.length });
+        }
         if (n.firstChild.textContent !== name) n.firstChild.textContent = name;
-        if (n.lastChild.textContent !== v) n.lastChild.textContent = v;
+        roll(n.lastChild, fresh ? undefined : n.lastChild._at ?? n.lastChild._n, tl.tokens, v, quiet || enter);
+        n.lastChild._n = tl.tokens;
         // a gap of 3px between tiles: each 1.5px in from its rect
         const pc = (a, b) => +((a / b) * 100).toFixed(3);
         n.style.left = `calc(${pc(tl.x, W)}% + 1.5px)`;
@@ -682,7 +746,9 @@
         : "Estimated from what the agent sent: the vendor didn't say how many tokens it read");
       head.append(title);
       if (opts.foldable) {
-        head.append(el("span", "ctx-short", fmtK(p.tokens) + (window ? " / " + fmtK(window) + " · " + pct(full) : "")));
+        const short = el("span", "ctx-short");
+        short.append(num("span", "", p.tokens), window ? " / " + fmtK(window) + " · " + pct(full) : "");
+        head.append(short);
         // folded, a thin bar of what fills the window, a part each; it is
         // morphed with the head, so a live request moves its widths only
         const bar = el("span", "ctx-stack");
@@ -713,7 +779,7 @@
         k.append(h);
       }
       const big = el("div", "ctx-big");
-      big.append(el("b", "", fmtK(p.tokens)));
+      big.append(num("b", "", p.tokens));
       big.append(el("span", "", window ? "/ " + fmtK(window) + " " + t("tokens") : t("tokens")));
       const sub = el("div", "ctx-sub");
       if (window) {
@@ -775,9 +841,12 @@
         else if (e.dataset.it !== String(c.item)) e.dataset.it = c.item;
       });
       cur = { p, window, cells, partOf };
-      if (!tip.hidden) tip.hidden = true;
+      // a tile pointed at keeps its tip through a live request's draws
+      const over = !tip.hidden && map.dataset.f === "tile" ? [...tiles.values()].find((n) => n.classList.contains("on")) : null;
+      if (!tip.hidden && !over) tip.hidden = true;
       map.setAttribute("aria-label", grid.getAttribute("aria-label"));
       drawMap(false);
+      if (over) followTip(over);
 
       // the legend: a part hovered lights its cells
       const legend = el("div", "ctx-legend");
@@ -786,7 +855,7 @@
         if (!part || part.tokens <= 0) continue;
         const li = el("span", "ctx-leg");
         li.title = t(PART_NOTES[kind]);
-        li.append(el("i", "dot k-" + kind), el("span", "n", partName(kind)), el("span", "v", fmtK(part.tokens)));
+        li.append(el("i", "dot k-" + kind), el("span", "n", partName(kind)), num("span", "v", part.tokens));
         clickable(li, () => openCtxText(rid, kind));
         li.onpointerenter = () => focusOn(kind);
         li.onpointerleave = unfocus;
@@ -794,7 +863,7 @@
       }
       if (window && window > p.tokens) {
         const li = el("span", "ctx-leg");
-        li.append(el("i", "dot free"), el("span", "n", t("Free space")), el("span", "v", fmtK(window - p.tokens)));
+        li.append(el("i", "dot free"), el("span", "n", t("Free space")), num("span", "v", window - p.tokens));
         li.onpointerenter = () => focusOn("free");
         li.onpointerleave = unfocus;
         legend.append(li);
@@ -1428,6 +1497,7 @@
     const note = el("div", "ctx-tune-src");
     title.after(note);
     if (set.locked) note.textContent = t("{name} is set and comes first", { name: set.locked });
+    else if (set.source == "long") note.textContent = t("Long conversations, shared by Codex, Claude Code and Grok Build");
     else if (set.ours) note.textContent = t("Set by magpie");
     else if (set.value && a.compact && +set.value > a.compact.window && a.compact.window) note.textContent = t("You set {value}; the model's {window} comes first", { value: show(set.value), window: fmtK(a.compact.window) });
     else if (set.value) note.textContent = t("You set {value}", { value: show(set.value) });
@@ -1470,10 +1540,8 @@
       go.onclick = () => send("apply", lean.value);
       foot.append(go);
     }
-    // a window of the reader's own (#1860): one who would spend some tokens
-    // for fewer compactions picks it from the same replay the advice comes
-    // from, each value with what it spends past the leanest and how often
-    // it would have compacted in the range, both estimates
+    // a window of the reader's own (#1860), from the same replay: each
+    // value's tokens past the leanest and compactions, both estimates
     const pts = (a.compact && a.compact.curve) || [];
     if (pts.length > 1 && !set.locked) {
       const other = el("button", "text ctx-tune-pick", t("Other window…"));

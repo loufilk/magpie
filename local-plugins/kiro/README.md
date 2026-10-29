@@ -4,6 +4,22 @@ Signs in to a [Kiro](https://kiro.dev) subscription (Free, Pro, Pro+,
 Power) and makes its requests, in OpenCode and in magpie. Provider id:
 `kiro`.
 
+## Pinned custom build
+
+This local package combines custom Kiro commit
+`780aa7a717bbab5a2e74a7f12e0cbd8b66d9a13a` with the Kiro changes in
+[magpie-community/plugins at `fd40b20c3bad27144a9041839c6b2e0aa60ec203`](https://github.com/magpie-community/plugins/tree/fd40b20c3bad27144a9041839c6b2e0aa60ec203/packages/kiro).
+Their common repository ancestor is
+`ba9801c953948c6ff4d435dbc529f39916f3bdc9`; its latest Kiro change was
+`9f6c4e8861260acdfb0b6849b0d05545c535ff53` (0.1.16).
+
+The aligned package version is 0.1.18, not an unmodified npm build. It keeps
+this fork's native effort, GPT Chat, unknown-cache and reported-zero input
+behavior. The upstream additions are 0.1.17's numeric credit windows
+(`amount`, `limit`, `unit`) for Magpie's remaining-credit display and
+0.1.18's oversized-image handling described below. Use this pinned local
+source, not the official npm package as a substitute for the custom code.
+
 ## Signing in
 
 - **Kiro (Google, GitHub, AWS Builder ID, IAM Identity Center)**: the Kiro
@@ -97,6 +113,11 @@ handles each request:
   - A tool's images (a screenshot, Codex's view_image) go with the
     message that answers the call, as Kiro's tool results hold text alone.
   - Only the latest images are sent.
+  - An image Kiro would turn away for size (over 5 MiB as Base64, which is
+    3.75 MiB of file) is made smaller on the request being sent: its long
+    edge brought to 2000 pixels, then WebP or JPEG, smaller each try. One
+    that can't be read or brought under is replaced by a short note, so the
+    conversation goes on (#428). Smaller images are sent as they are.
   - Tools the history used but the request doesn't offer are declared.
 - It turns the AWS event stream Kiro answers with back into the selected
   protocol's streamed events or one response. The reply includes text, thinking,
@@ -137,7 +158,7 @@ undocumented alias includes or subtract cached tokens from it.
 
 This is separate from the short-lived model capability catalog cache used
 for native effort validation. The custom native-effort changes still need
-the pinned fork commit; the upstream 0.1.16 package version alone does not
+the pinned fork commit; the upstream 0.1.18 package version alone does not
 identify this custom build.
 
 ## Models
