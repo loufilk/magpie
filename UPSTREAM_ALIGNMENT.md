@@ -1,4 +1,111 @@
-# 定制源码对齐记录 · 2026-10-28
+# 定制源码对齐记录 · 2026-10-29
+
+## 02:04 UTC 固定上游与本轮结果
+
+本轮从实际远端 `61aaa62913c4b97012bffd0a325734771c4565f4` 继续三方合并，
+固定查询时官方 main 为
+[`yetone/magpie@f02390544d11b023a4d9e3c70856a40d028031c2`](https://github.com/yetone/magpie/commit/f02390544d11b023a4d9e3c70856a40d028031c2)。
+相对上一 pin `ea53eb12` 接入 205 commits、520 files（+34,726 / −2,657），
+不继续追逐此后的 tip。唯一文本冲突在 gateway-routing 的 One try 行，
+已同时保留官方慢上传重试说明和现有 native Messages / error 契约。
+升级目标仍为 `dot/upstream-align-20261028`，Draft PR #1 的 base 仍是
+`codex/core-running-20261028`；本文不是部署、发布或运行版本声明。
+
+官方插件固定到
+[`magpie-community/plugins@50e99c252401cd835094bf971394644a12100a81`](https://github.com/magpie-community/plugins/commit/50e99c252401cd835094bf971394644a12100a81)。
+其相对 `2c308184` 的 27 commits 没有修改 Kiro：全部 17 个官方文件 tree
+同为 `b02b4a580904564fbe911702666af1d487c8818f`，最后源码仍是
+`ceda58008093755e31381db9fd37f0097f1b2c22` / 0.1.18。
+本地定制 Kiro 全部 20 个文件与 `61aaa629` 字节相同，未以 npm 包覆盖。
+本轮没有 WorkBuddy JSON 导入、旧账号未交付的缓存模拟或运行配置切换。
+
+### 保留与必要兼容修复
+
+独立审查没有找到可以语义去重的上游 Messages gather、原生 cache boundary
+或 Chat unknown-cache 替代。原生 effort / schema / opaque blocks / usage、
+调用者显式缓存选择，以及 Kiro catalog-driven effort / GPT Chat / 续期后
+重验等既有定制均保留。官方新 body-room admission 位于公共请求体入口，
+不会被 gather 绕过；translation marshal 优化不能替代原生字段保留。
+
+上游 `25df3187` 为翻译路径增加了“HTTP 200 SSE 明确要求
+`thinking.type` enabled”时的恢复；原生非流式 Messages gather 未经过该
+分支。同一 fake plugin 的端到端请求与官方 translate 对照证明：旧合并
+树只调用一次并返回 400，官方对照调用两次后成功且下次只需一次。
+本轮给 gather 补上最小同义恢复，不改回有损翻译：
+
+- 仅在明确 vendor SSE error、读至正常 EOF、请求未取消、尚无任何内容块
+  或未知事件时，使用官方 `withThinkingEnabled` 重试一次并记忆要求。
+- native effort、format/schema、opaque 大整数和 cache 选择仍保留；重试
+  结果继续以完整 Messages JSON 返回，不退成 SSE。
+- 已 enabled/adaptive、已有文字/工具/thinking/opaque 输出、另一个首错误、
+  policy refusal、parser/transport 诊断与取消都不新增此重试。
+- whole HTTP 200 JSON 保持旧行为；旧 sniffer 不覆盖重试的 usage/error
+  metadata，旧 RequestID 在再次发送前清空。
+
+实现及契约见 [`gathered_messages.go`](internal/gateway/gathered_messages.go)、
+[`passthrough`](internal/gateway/gateway.go) 和
+[provider-plugins](docs/subsystems/provider-plugins.md)。独立 red-on-old 有
+4 个明确行为失败；最终修复的 27 子用例（另含 2 个顶层测试）全部通过。
+
+另外，将 Qoder mover 最低版本从官方 host 的 0.2.46 同步到固定 plugins
+已发布的 0.2.47，来源为
+[`f9689178` / plugins #470](https://github.com/magpie-community/plugins/commit/f96891787552f3c68c850c68057ad21d274626c2)。
+该版给每个默认模型明确声明 `attachment` / `modalities.input`，防止
+text-only 模型继承另一 vendor 同名模型的图像能力。npm exact version、
+tarball integrity、入口与固定源码逐字节一致已核验。用户 pin 和本地路径
+保护不变；没有修改外部 plugins 仓库或安装到用户运行环境。
+
+### 本轮新跑验证（02:41 UTC 完成）
+
+全部使用隔离 HOME/USERPROFILE/XDG、合成账号及本地 fake vendors；Kiro
+和 Qoder 单测另有未 mock 外网 fail-fast guard。没有真实账号登录、真实
+vendor 或付费模型调用。Go 计数包含测试与子测试，不能与叶子数混用。
+
+| 检查 | 通过 | 失败 / 跳过 |
+| --- | ---: | --- |
+| 最终 Gateway 定向，Go 1.26.8 | 365 | 0 / 0 |
+| 最终 Gateway 并发/定制定向 race，Go 1.27.3 | 328 | 0 / 1 |
+| Plugin host 定向，Go 1.27.3 | 18 | 0 / 0 |
+| Provider 定向，Go 1.27.3（两组不重叠） | 25 | 0 / 0 |
+| JSONC edit / Library 实际 hub-toggle fixture | 90 / 3 | 0 / 0 |
+| usage ledger/cache knowledge | 13 | 0 / 0 |
+| proc / agent source guards | 1 / 1 | 0 / 0 |
+| GUI source guards | 1 | **1 / 0** |
+| 未改动 vendored Kiro，Bun 1.4.3，16 files / 799 assertions | 165 | 0 / 0 |
+| Qoder 0.2.47 官方 capabilities 回归 | 2 | 0 / 0 |
+
+race 的一个 skip 是官方 `TestMarshalBodyAllocatesTwoBodies` 在 race 模式
+明确跳过 sync.Pool 分配基准；它在普通 Go 1.26.8 run 已通过。最初较宽
+race 因旧的全协议大请求矩阵在 instrumentation 下每项约 76 秒，由 owner
+在 02:39 UTC 停止（exit 130），未算作完成或通过；最终 race 不包含这四组
+大型请求边界，但保留新 body-room、marshal 行为、并发、stream admission、
+原生 gather/cache/error/effort、thinking 恢复及慢上传恢复。大型请求边界
+全部包含在已完成的普通 365 项中；没有改测试或调阈值来获得通过。
+Qoder 的同一官方 capabilities 用例在 0.2.46 fixture 为 0 pass / 2 fail，
+在固定源码为 2 pass（128 assertions），红项是缺少 text-only 声明。
+
+最终 Go 1.26.8 `go vet -tags nogui ./...`、Linux `CGO_ENABLED=0 go build
+-tags nogui -trimpath`、全仓 gofmt、108 个变更 JS/CJS/MJS 文件语法检查
+通过。测试时的完整 index tree 为
+`8e5381319d33abb1f0c4d9803cdb62a079a08d63`；此后仅补齐本文件的运行记录，
+没有改变已测试生产代码。相对官方的 38 个定制/附加文件高置信秘密模式
+扫描无发现（不是完整无秘密保证）。完整全仓套件、浏览器/桌面 E2E、
+跨平台实际运行及真实账户 refresh 没有运行，不能从 syntax/build 推导通过。
+
+### 明确保留的上游红项
+
+`TestCoreScriptBudget`：1,531,531 bytes > 1,530,861，超 670 bytes。
+在完全未修改的官方 `f0239054` worktree 新跑同名测试，得到完全相同失败；
+本轮没有任何自定义 GUI asset 改动。官方已跟踪
+[#4133](https://github.com/yetone/magpie/issues/4133)，02:07 UTC 评论已有
+维护者接手。未抬高预算掩盖、未把该项跳过或称作通过，也未夹带 GUI 重构。
+因此本轮不是“所有测试全绿”。此前 Unix socket 的 sandbox 阻塞仅为历史
+记录，本轮没有再次运行该受限用例或尝试绕过。GitHub CI 以最终发布 head
+的实际回读为准；本地 pass 不等于 CI pass。
+
+---
+
+# 以下为 2026-10-28 的历史记录，不是本轮新跑结果
 
 ## 07:07 UTC 最终截止 pin
 
