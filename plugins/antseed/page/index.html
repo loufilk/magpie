@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Antseed</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="_magpie/bridge.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+<main>
+  <header class="masthead"><div class="brand"><img src="icon.svg" width="44" height="44" alt=""><div><div class="eyebrow">MAGPIE PROVIDER</div><h1>Antseed</h1></div></div><span class="badge">USDC · Base</span></header>
+  <section class="intro"><h2 data-i18n="title">按你的价格，调用网络中的模型</h2><p data-i18n="intro">先在「供应商 → Antseed」连接网关。模型列表自动更新；余额与用量显示在供应商卡片中。</p></section>
+  <div class="guide"><div class="guide-number">01</div><div><strong data-i18n="walletTitle">钱包与充值</strong><p data-i18n="walletBody">从 Antseed 登录选项打开「钱包 / 充值控制台」。在官方控制台使用银行卡或 Base USDC 充值，也可以查看账单、管理预算与多个钱包。</p></div></div>
+  <form id="settings" novalidate>
+    <section class="card"><div class="section-head"><h3 data-i18n="routing">模型与路由</h3><span class="small" data-i18n="routingSub">每次请求前核对报价</span></div>
+      <label class="toggle"><span><strong data-i18n="preferFree">免费优先</strong><small data-i18n="preferFreeHelp">优先选择合格的零价供应商，其次比较收费报价。</small></span><input type="checkbox" id="preferFree" role="switch"></label>
+      <label class="toggle"><span><strong data-i18n="freeOnly">仅使用免费模型</strong><small data-i18n="freeOnlyHelp">输入、输出和缓存读取均须为零价。免费额度可能有供应商使用条件。</small></span><input type="checkbox" id="freeOnly" role="switch"></label>
+      <label class="toggle"><span><strong data-i18n="auto">显示自动选择入口</strong><small data-i18n="autoHelp">调用前选择符合条件的供应商；失败后的下一次请求会避开冷却中的节点。</small></span><input type="checkbox" id="includeAutoRoutes" role="switch"></label>
+      <label class="toggle"><span><strong data-i18n="pinned">显示指定供应商入口</strong><small data-i18n="pinnedHelp">模型 ID 带有供应商标识，适合固定线路和对比价格。</small></span><input type="checkbox" id="includePinnedRoutes" role="switch"></label>
+    </section>
+    <section class="card"><div class="section-head"><h3 data-i18n="caps">全局采购限价</h3><span class="small">USD / 1M tokens</span></div><p class="hint" data-i18n="capsHelp">留空沿用网关设置，填写 0 表示只接受零价。各项限制同时生效。</p>
+      <div class="price-grid"><label><span data-i18n="input">输入</span><input id="maxInputUsdPerMillion" inputmode="decimal" type="number" min="0" step="any" placeholder="—"></label><label><span data-i18n="output">输出</span><input id="maxOutputUsdPerMillion" inputmode="decimal" type="number" min="0" step="any" placeholder="—"></label><label><span data-i18n="cache">缓存读取</span><input id="maxCachedInputUsdPerMillion" inputmode="decimal" type="number" min="0" step="any" placeholder="—"></label></div>
+    </section>
+    <section class="card"><div class="section-head"><h3 data-i18n="rules">单模型采购规则</h3><button type="button" class="secondary" id="add-rule" data-i18n="addRule">＋ 添加模型</button></div><p class="hint" data-i18n="rulesHelp">与全局限制取更严格的值。倍率按供应商报价 ÷ 目录中的参考零售价计算；缺少参考价时停止该模型请求。</p><div id="rule-rows"></div><p class="empty" id="rules-empty" data-i18n="noRules">所有模型沿用全局设置</p></section>
+    <section class="card"><div class="section-head"><h3 data-i18n="scope">供应商与模型范围</h3></div><div class="scope-grid"><label><span data-i18n="allowed">允许的供应商</span><textarea id="allowedPeers" rows="3" placeholder="0x…"></textarea><small data-i18n="allowedHelp">每行一个 peer ID，留空允许全部。</small></label><label><span data-i18n="blocked">屏蔽的供应商</span><textarea id="blockedPeers" rows="3" placeholder="0x…"></textarea><small data-i18n="blockedHelp">屏蔽优先于允许。</small></label></div><label class="model-scope"><span data-i18n="models">允许的模型</span><textarea id="models" rows="2" placeholder="deepseek-v3.2"></textarea><small data-i18n="modelsHelp">每行一个目录中的模型 ID，留空显示所有可用模型。</small></label></section>
+    <div class="save-bar"><p id="status" role="status" aria-live="polite"></p><button id="save" type="submit" data-i18n="save">保存采购设置</button></div>
+  </form>
+  <footer><p data-i18n="accounting">实际扣费以 Antseed 请求账本为准。参考零售价与供应商公告价用于筛选，待结算的请求在官方控制台显示状态。</p><span>Antseed Provider · 0.1.0</span></footer>
+</main>
+</body>
+</html>

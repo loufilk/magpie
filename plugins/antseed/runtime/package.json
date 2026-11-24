@@ -1,0 +1,10 @@
+{
+  "name": "magpie-antseed-private-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@antseed/cli": "0.1.259",
+    "@antseed/router-local": "0.1.54",
+    "@antseed/antseed-verifier": "0.1.10"
+  }
+}

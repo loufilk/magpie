@@ -1,0 +1,51 @@
+{
+  "name": "opencode-antseed-auth",
+  "version": "0.1.0",
+  "description": "Antseed models in Magpie: managed local gateway, wallet console, live catalog and procurement controls.",
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": "./index.mjs",
+  "bin": { "magpie-antseed": "./bin/antseed-plugin.mjs" },
+  "files": ["index.mjs", "lib", "bin", "page", "runtime", "docs", "README.md", "LICENSE", "Dockerfile", "compose.yaml"],
+  "scripts": {
+    "build": "node scripts/build-page.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "test:magpie": "node scripts/test-magpie.mjs"
+  },
+  "engines": { "node": ">=22.0.0", "magpie": ">=0.1.4755" },
+  "keywords": ["magpie-plugin", "opencode-plugin", "opencode", "antseed", "provider"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/loufilk/magpie.git", "directory": "plugins/antseed" },
+  "magpie": {
+    "name": "Antseed",
+    "summary": {
+      "en": "Antseed models, a managed local gateway, wallet funding and live prices.",
+      "zh": "自动运行 Antseed 网关，在 Magpie 调用模型、查看余额和设置采购限价。"
+    },
+    "maxConcurrency": 4,
+    "page": {
+      "title": "Antseed",
+      "titles": { "zh": "Antseed 采购设置", "zh-TW": "Antseed 採購設定", "en": "Antseed procurement" },
+      "file": "page/index.html",
+      "icon": "page/icon.svg"
+    },
+    "permissions": [],
+    "options": {
+      "includeAutoRoutes": true,
+      "includePinnedRoutes": true,
+      "freeOnly": false,
+      "preferFree": true,
+      "maxInputUsdPerMillion": null,
+      "maxOutputUsdPerMillion": null,
+      "maxCachedInputUsdPerMillion": null,
+      "allowedPeers": [],
+      "blockedPeers": [],
+      "models": [],
+      "rules": {},
+      "discoveryTimeoutMs": 15000,
+      "dispatchCatalogTtlMs": 2000,
+      "cooldownMs": 30000
+    }
+  }
+}

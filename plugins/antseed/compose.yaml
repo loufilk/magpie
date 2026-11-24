@@ -1,0 +1,19 @@
+services:
+  magpie-antseed:
+    build: .
+    container_name: magpie-antseed
+    restart: unless-stopped
+    # Linux host networking keeps Antseed P2P discovery and its private
+    # loopback console usable. All three HTTP listeners stay on loopback.
+    network_mode: host
+    init: true
+    stop_grace_period: 210s
+    environment:
+      MAGPIE_WEB_KEY: ${MAGPIE_WEB_KEY:?Set a private MAGPIE_WEB_KEY of at least 16 characters}
+      MAGPIE_ADDR: 127.0.0.1:3425
+      MAGPIE_DRAIN: 180s
+      MAGPIE_NAME: Antseed
+    volumes:
+      - magpie-antseed-config:/config
+volumes:
+  magpie-antseed-config:
