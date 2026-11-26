@@ -21,6 +21,15 @@ const run = (command, args) => spawnSync(command, args, { encoding: 'utf8', time
 const zero = { inputUsdPerMillion: 0, outputUsdPerMillion: 0, cachedInputUsdPerMillion: 0 };
 const priceFields = ['inputUsdPerMillion', 'outputUsdPerMillion', 'cachedInputUsdPerMillion'];
 
+function discoveryCounts(status) {
+  const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+  // Current Buyer fields take precedence, including zero; retain legacy JSONL keys.
+  return {
+    dhtNodes: count(status?.dhtNodeCount ?? status?.dhtNodes),
+    peers: count(status?.peerCount ?? status?.peers),
+  };
+}
+
 // Decode bounded BEP5 bencode; reject malformed/trailing data and duplicate keys.
 function decode(buf) {
   let i = 0;
@@ -138,17 +147,17 @@ async function main() {
   const officialReplies=await Promise.all(official.map(h=>probe(h)));
   const fallbackReplies=officialReplies.some(Boolean)?[]:await Promise.all(fallback.map(h=>probe(h)));
   emit('bootstrap_summary',{officialResponded:officialReplies.filter(Boolean).length,fallbackResponded:fallbackReplies.filter(Boolean).length,fallbackProbed:fallbackReplies.length,probeIndependentOfBuyerConfig:true});
-  const base=`http://127.0.0.1:${port}`; const deadline=Date.now()+opt.seconds*1000; let status, peers, models;
+  const base=`http://127.0.0.1:${port}`; const deadline=Date.now()+opt.seconds*1000; let status, peers, models, counts;
   do {
     [status,peers,models]=await Promise.all([get(base,'/_antseed/status'),get(base,'/_antseed/peers'),get(base,'/v1/models?type=text')]);
-    const s=status.data; emit('buyer',{error:status.error??null,dhtNodes:s?.dhtNodes??null,peers:s?.peers??null,catalogModels:Array.isArray(models.data?.data)?models.data.data.length:null,peerEndpointError:peers.error??null,catalogError:models.error??null});
+    counts=discoveryCounts(status.data); emit('buyer',{error:status.error??null,...counts,catalogModels:Array.isArray(models.data?.data)?models.data.data.length:null,peerEndpointError:peers.error??null,catalogError:models.error??null});
     if(status.error||Date.now()>=deadline) break;
     await sleep(Math.min(10000,Math.max(0,deadline-Date.now())));
   }while(true);
   if(models.data) await catalog(models.data.data,base);
   const cached=await get('https://antscan.co','/api/marketplace?limit=1');
   emit('public_marketplace',{error:cached.error??null,collectorLastPoll:cached.data?.collector?.lastPollCompletedAt??null,returnedOffers:Array.isArray(cached.data?.offerings)?cached.data.offerings.length:null,source:'cached_not_local_discovery'});
-  const discoveryObserved=typeof status.data?.dhtNodes==='number'&&status.data.dhtNodes>0&&typeof status.data?.peers==='number'&&status.data.peers>0;
+  const discoveryObserved=counts.dhtNodes>0&&counts.peers>0;
   if(!discoveryObserved) process.exitCode=2;
   emit('result',{inferencePosts:0,paymentPosts:0,discoveryObserved,notes:'No configuration changes; no inference, funding, staking or settlement commands. Run in the actual Buyer network namespace.'});
 }
